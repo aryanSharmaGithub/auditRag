@@ -13,6 +13,7 @@ import pytest
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
 from auditrag.config import ChunkingSettings, Settings, StorageSettings
+from auditrag.llm import LLMClient
 
 
 class DummyEmbeddingFunction(EmbeddingFunction[Documents]):
@@ -38,6 +39,29 @@ class DummyEmbeddingFunction(EmbeddingFunction[Documents]):
     @staticmethod
     def name() -> str:
         return "auditrag-test-dummy"
+
+
+class FakeLLM(LLMClient):
+    """Canned LLM: returns queued replies in order, no network access.
+
+    With multiple replies, each call consumes the next one (generation then
+    verification); the last reply repeats if calls exceed replies. Calls are
+    recorded on ``calls`` as ``(system, user)`` for prompt assertions.
+    """
+
+    def __init__(self, *replies: str) -> None:  # noqa: D107 (bypasses LLMClient init)
+        self._replies = list(replies)
+        self.calls: list[tuple[str, str]] = []
+
+    @property
+    def model(self) -> str:
+        return "fake-model"
+
+    def complete(self, system: str, user: str) -> str:
+        self.calls.append((system, user))
+        if len(self._replies) > 1:
+            return self._replies.pop(0)
+        return self._replies[0]
 
 
 @pytest.fixture()

@@ -66,6 +66,12 @@ def _build_parser() -> argparse.ArgumentParser:
     ask.add_argument(
         "--top-k", type=int, default=6, help="Chunks offered as context (default: 6)."
     )
+    ask.add_argument(
+        "--verify",
+        action="store_true",
+        help="Run the faithfulness pass: judge every claim against its cited "
+        "evidence and print a verdict per sentence (one extra LLM call).",
+    )
     _add_config_arg(ask)
 
     serve = subparsers.add_parser(
@@ -137,7 +143,16 @@ def _run_search(question: str, top_k: int, config: Path | None) -> int:
     return 0
 
 
-def _run_ask(question: str, top_k: int, config: Path | None) -> int:
+_VERDICT_SYMBOLS = {
+    "supported": "+",
+    "partial": "~",
+    "unsupported": "!",
+    "uncited": "?",
+    None: " ",
+}
+
+
+def _run_ask(question: str, top_k: int, verify: bool, config: Path | None) -> int:
     """Execute the ask command. Returns a process exit code."""
     from auditrag.answer import generate_answer
     from auditrag.llm import LLMError
@@ -145,7 +160,7 @@ def _run_ask(question: str, top_k: int, config: Path | None) -> int:
 
     settings = Settings.load(config)
     try:
-        answer = generate_answer(question, settings, top_k=top_k)
+        answer = generate_answer(question, settings, top_k=top_k, verify=verify)
     except (RetrievalError, LLMError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -163,6 +178,17 @@ def _run_ask(question: str, top_k: int, config: Path | None) -> int:
         print(f" {marker}[{i}] {chunk.doc_name} p.{chunk.page}  ({chunk.chunk_id})")
     if cited_ids:
         print(" * = cited in the answer")
+
+    if answer.verified:
+        print("\nFaithfulness:")
+        for claim in answer.claims:
+            symbol = _VERDICT_SYMBOLS[claim.verdict]
+            verdict = claim.verdict or "no verdict"
+            note = f"  — {claim.verdict_note}" if claim.verdict_note else ""
+            print(f" {symbol} {verdict:<11} {claim.text}{note}")
+        flagged = sum(1 for c in answer.claims if c.verdict == "unsupported")
+        if flagged:
+            print(f"\n {flagged} claim(s) NOT supported by their cited sources.")
     return 0
 
 
@@ -188,7 +214,7 @@ def main() -> None:
         if args.command == "search":
             sys.exit(_run_search(args.question, args.top_k, args.config))
         if args.command == "ask":
-            sys.exit(_run_ask(args.question, args.top_k, args.config))
+            sys.exit(_run_ask(args.question, args.top_k, args.verify, args.config))
         if args.command == "serve":
             sys.exit(_run_serve(args.host, args.port, args.config))
         parser.error(f"Unknown command: {args.command}")

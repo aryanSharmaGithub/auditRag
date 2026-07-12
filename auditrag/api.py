@@ -33,6 +33,16 @@ class QueryRequest(BaseModel):
     top_k: int = Field(default=6, ge=1, le=50, description="Maximum chunks to return.")
 
 
+class AskRequest(QueryRequest):
+    """Body of ``POST /ask``."""
+
+    verify: bool = Field(
+        default=False,
+        description="Run the faithfulness pass (one extra LLM call) and attach "
+        "per-claim verdicts.",
+    )
+
+
 class HealthResponse(BaseModel):
     """Body of ``GET /health``."""
 
@@ -104,13 +114,17 @@ def create_app(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @app.post("/ask", response_model=Answer)
-    def ask(request: QueryRequest) -> Answer:
-        """Return a generated answer with sentence-level citations."""
+    def ask(request: AskRequest) -> Answer:
+        """Return a generated answer with sentence-level citations.
+
+        With ``verify: true``, each claim also carries a faithfulness verdict.
+        """
         try:
             return generate_answer(
                 request.question,
                 app_settings,
                 top_k=request.top_k,
+                verify=request.verify,
                 retriever=get_retriever(),
                 llm_client=get_llm(),
             )

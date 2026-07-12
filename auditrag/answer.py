@@ -106,6 +106,7 @@ def generate_answer(
     question: str,
     settings: Settings,
     top_k: int = 6,
+    verify: bool = False,
     retriever: Retriever | None = None,
     llm_client: LLMClient | None = None,
     embedding_function: EmbeddingFunction[Documents] | None = None,
@@ -116,6 +117,8 @@ def generate_answer(
         question: Natural-language question.
         settings: Loaded AuditRAG settings.
         top_k: Number of chunks to offer the model as context.
+        verify: When true, run the faithfulness pass afterwards (one extra
+            LLM call) and attach per-claim verdicts.
         retriever: Optional pre-built retriever (reused across API requests).
         llm_client: Optional pre-built LLM client, or a test double.
         embedding_function: Optional override used only when ``retriever``
@@ -144,7 +147,7 @@ def generate_answer(
     )
     claims, parse_warnings = parse_cited_answer(answer_text, label_map)
 
-    return Answer(
+    answer = Answer(
         question=question,
         answer_text=answer_text,
         claims=claims,
@@ -152,3 +155,8 @@ def generate_answer(
         model=llm_client.model,
         warnings=retrieval.warnings + parse_warnings,
     )
+    if verify:
+        from auditrag.verify import verify_answer
+
+        answer = verify_answer(answer, settings, llm_client=llm_client)
+    return answer

@@ -7,7 +7,17 @@ chunk provenance can never be silently dropped between stages.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+Verdict = Literal["supported", "partial", "unsupported", "uncited"]
+"""Faithfulness verdict for one claim.
+
+``supported``/``partial``/``unsupported`` come from the verifier model
+judging the claim against its cited evidence. ``uncited`` is assigned
+directly — a claim with no resolvable citations has nothing to verify.
+"""
 
 
 def mint_chunk_id(doc_id: str, page: int, chunk_index: int) -> str:
@@ -112,6 +122,15 @@ class Claim(BaseModel):
         default_factory=list,
         description="Citation labels the model emitted that were never offered.",
     )
+    verdict: Verdict | None = Field(
+        default=None,
+        description="Faithfulness verdict; None until a verification pass runs "
+        "(or when the verifier failed to judge this claim — see Answer.warnings).",
+    )
+    verdict_note: str = Field(
+        default="",
+        description="The verifier's one-line justification for the verdict.",
+    )
 
 
 class Answer(BaseModel):
@@ -129,6 +148,10 @@ class Answer(BaseModel):
         description="Context offered to the model; index i corresponds to label [i+1]."
     )
     model: str = Field(description="Chat model that generated the answer.")
+    verified: bool = Field(
+        default=False,
+        description="True when a faithfulness verification pass has run over the claims.",
+    )
     warnings: list[str] = Field(
         default_factory=list,
         description="Integrity warnings: invented citations, store desync, ...",

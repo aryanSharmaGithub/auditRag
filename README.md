@@ -8,7 +8,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Ingestion, citation-tracked retrieval, and cited generation (`ask`) are shipped and tested; the faithfulness verification pipeline is in progress. The [roadmap](#roadmap) below is the source of truth.
+> **Status:** early development. Ingestion, citation-tracked retrieval, cited generation (`ask`), and the faithfulness verification pass (`ask --verify`) are shipped and tested. The [roadmap](#roadmap) below is the source of truth.
 
 ## Why
 
@@ -33,6 +33,10 @@ auditrag serve
 # Ask a question, get an answer where every sentence cites its source
 # (needs an LLM endpoint — set OPENAI_API_KEY, or point llm.base_url at Ollama)
 auditrag ask "What is the data retention period?"
+
+# Same, plus a faithfulness pass: every claim is judged against the exact
+# text of the chunks it cites — unsupported claims get flagged
+auditrag ask --verify "What is the data retention period?"
 ```
 
 Requires Python 3.10+. Ingestion is idempotent: unchanged files are skipped, modified files are re-indexed in place.
@@ -101,7 +105,7 @@ embedding:
 - [x] **Retrieval endpoint** — FastAPI `/query` and `auditrag search` returning ranked chunks with full provenance (retrieval quality is debuggable before any LLM is involved)
 - [x] **Cited generation** — `auditrag ask` and `POST /ask`: sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
 - [ ] **Hybrid search** — BM25 + vector with reciprocal rank fusion
-- [ ] **Faithfulness verification** — independent pass judging each claim against its cited chunk: `supported` / `partial` / `unsupported`
+- [x] **Faithfulness verification** — `ask --verify` / `"verify": true`: independent pass judging each claim against the registry text of its cited chunks: `supported` / `partial` / `unsupported` / `uncited`
 - [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
 - [ ] **Evidence export** — timestamped PDF report: question, claims, verdicts, verbatim cited chunks with provenance
 

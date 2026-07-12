@@ -16,26 +16,12 @@ from auditrag.answer import generate_answer, parse_cited_answer
 from auditrag.api import create_app
 from auditrag.config import Settings
 from auditrag.ingest import ingest_path
-from auditrag.llm import LLMClient, LLMError
+from auditrag.llm import LLMError
 from auditrag.retrieval import Retriever
 
-from .conftest import DummyEmbeddingFunction
+from .conftest import DummyEmbeddingFunction, FakeLLM
 
 LABELS = {1: "aaa:1:0", 2: "bbb:2:1", 3: "ccc:3:0"}
-
-
-class FakeLLM(LLMClient):
-    """Returns a canned answer without any network access."""
-
-    def __init__(self, reply: str) -> None:  # noqa: D107 (bypasses LLMClient init)
-        self._reply = reply
-
-    @property
-    def model(self) -> str:
-        return "fake-model"
-
-    def complete(self, system: str, user: str) -> str:
-        return self._reply
 
 
 # --- parse_cited_answer -----------------------------------------------------
