@@ -5,7 +5,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Ingestion (milestone 1) is shipped and tested; `ask` and the verification pipeline are in progress. The [roadmap](#roadmap) below is the source of truth.
+> **Status:** early development. Ingestion and citation-tracked retrieval are shipped and tested; cited generation (`ask`) and the verification pipeline are in progress. The [roadmap](#roadmap) below is the source of truth.
 
 ## Why
 
@@ -55,7 +55,7 @@ flowchart LR
     SQ -. "verbatim evidence" .-> V
 ```
 
-Three invariants make the citations trustworthy:
+The diagram shows the full v1 design; the [roadmap](#roadmap) tracks which stages are shipped. Three invariants make the citations trustworthy:
 
 - **Chunk IDs are minted once and never regenerated.** `{doc_hash}:{page}:{chunk_index}` is deterministic, human-decodable, and survives every pipeline stage. The LLM only ever sees small integer labels; the label→ID map lives in request scope, so a hallucinated citation is detected, not resolved.
 - **SQLite is the source of truth for chunk content.** ChromaDB holds embeddings keyed by the same IDs, nothing more. Citation resolution and evidence reports never depend on vector-store internals.
