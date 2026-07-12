@@ -8,7 +8,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Everything except the web UI is shipped and tested: ingestion, hybrid citation-tracked retrieval, cited generation (`ask`), the faithfulness pass (`--verify`), and PDF evidence export (`--export`). The [roadmap](#roadmap) below is the source of truth.
+> **Status:** the full v1 pipeline is shipped and tested — ingestion, hybrid citation-tracked retrieval, cited generation (`ask`), the faithfulness pass (`--verify`), PDF evidence export (`--export`), and a web UI (`auditrag serve`, then open the printed URL).
 
 ## Why
 
@@ -27,7 +27,7 @@ auditrag ingest ./docs
 # Inspect retrieval quality directly — ranked chunks with file, page, and ID
 auditrag search "What is the data retention period?"
 
-# Or run the HTTP API (GET /health, POST /query)
+# Or run the web UI + HTTP API, then open the printed URL in a browser
 auditrag serve
 
 # Ask a question, get an answer where every sentence cites its source
@@ -110,7 +110,7 @@ embedding:
 - [x] **Cited generation** — `auditrag ask` and `POST /ask`: sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
 - [x] **Hybrid search** — BM25 over the registry corpus + vector, fused with reciprocal rank fusion (k=60, deliberately not configurable)
 - [x] **Faithfulness verification** — `ask --verify` / `"verify": true`: independent pass judging each claim against the registry text of its cited chunks: `supported` / `partial` / `unsupported` / `uncited`
-- [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
+- [x] **Web UI** — `auditrag serve`: citation hover cards with source text and page numbers, color-coded verdict badges, one-click PDF export
 - [x] **Evidence export** — `ask --export` / `POST /report`: timestamped PDF with question, claims, verdicts, and verbatim cited chunks re-fetched from the registry at export time
 
 Deliberately out of scope for v1: multi-turn chat, rerankers, eval harnesses, pluggable fusion strategies. Single-shot Q&A keeps citation scope unambiguous; knobs get added when someone needs them.
