@@ -1,0 +1,21 @@
+# AuditRAG configuration. Copy to auditrag.yaml and edit as needed.
+# Every field is optional — the defaults below run locally with zero setup.
+
+chunking:
+  # Maximum characters per chunk. Chunks never cross page boundaries.
+  max_chars: 1200
+
+embedding:
+  # 'local'  — ChromaDB's built-in ONNX MiniLM model (no API key, downloads on first use)
+  # 'openai' — any OpenAI-compatible /embeddings endpoint (OpenAI, Ollama, vLLM, ...)
+  provider: local
+
+  # Used only when provider is 'openai':
+  # base_url: http://localhost:11434/v1   # e.g. Ollama; omit for api.openai.com
+  # model: text-embedding-3-small
+  # api_key_env: OPENAI_API_KEY           # env var holding the key
+
+storage:
+  # Directory holding the SQLite chunk registry and the ChromaDB index.
+  data_dir: .auditrag
+  collection: auditrag_chunks

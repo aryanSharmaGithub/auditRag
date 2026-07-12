@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//usr/local/bin/**)",
+      "Bash(command -v python3.12 python3.11 python3.13 uv)",
+      "Bash(uv venv *)",
+      "Bash(uv pip *)",
+      "Bash(.venv/bin/python -m pytest tests/ -v)",
+      "Bash(.venv/bin/python -m pytest tests/)",
+      "Bash(/Users/aryansharma/Desktop/auditrag/.venv/bin/auditrag ingest *)",
+      "Bash(sqlite3 .auditrag/chunks.db \"SELECT chunk_id, doc_name, page, substr\\(text,1,50\\) FROM chunks ORDER BY doc_name, page;\")"
+    ]
+  }
+}
