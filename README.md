@@ -5,8 +5,8 @@
 
 **RAG answers you can verify — citations, faithfulness checks, and exportable evidence reports.**
 
-<!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
-![AuditRAG demo](docs/assets/demo.gif)
+<!-- Static hero for now; a demo GIF (ingest → ask → hover citation → export report) will replace it. -->
+![AuditRAG web UI: each sentence of the answer is checked against its cited source. The unsupported claim is flagged in red, and hovering a citation shows the exact source text and page.](docs/assets/auditrag-web-ui.png)
 
 > **Status:** the full v1 pipeline is shipped and tested — ingestion, hybrid citation-tracked retrieval, cited generation (`ask`), the faithfulness pass (`--verify`), PDF evidence export (`--export`), and a web UI (`auditrag serve`, then open the printed URL).
 
