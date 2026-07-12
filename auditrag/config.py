@@ -60,6 +60,43 @@ class EmbeddingSettings(BaseModel):
         return os.environ.get(self.api_key_env) or "not-set"
 
 
+class LLMSettings(BaseModel):
+    """Controls the chat model used for cited generation.
+
+    Any OpenAI-compatible ``/chat/completions`` endpoint works (OpenAI,
+    Ollama, vLLM, LM Studio, ...).
+    """
+
+    base_url: str | None = Field(
+        default=None,
+        description="Base URL of the OpenAI-compatible endpoint, e.g. 'http://localhost:11434/v1'. None uses the OpenAI default.",
+    )
+    model: str = Field(
+        default="gpt-4o-mini",
+        description="Chat model name.",
+    )
+    api_key_env: str = Field(
+        default="OPENAI_API_KEY",
+        description="Name of the environment variable holding the API key.",
+    )
+    temperature: float = Field(
+        default=0.0,
+        description="Sampling temperature. Cited generation wants determinism; raise only with reason.",
+    )
+    max_tokens: int = Field(
+        default=1024,
+        description="Maximum tokens in the generated answer.",
+    )
+
+    def resolve_api_key(self) -> str:
+        """Return the API key from the configured environment variable.
+
+        Falls back to a placeholder because local endpoints (Ollama, vLLM)
+        accept any non-empty key.
+        """
+        return os.environ.get(self.api_key_env) or "not-set"
+
+
 class StorageSettings(BaseModel):
     """Controls where AuditRAG persists its indexes."""
 
@@ -78,6 +115,7 @@ class Settings(BaseModel):
 
     chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    llm: LLMSettings = Field(default_factory=LLMSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
 
     @property

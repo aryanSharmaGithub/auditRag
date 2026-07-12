@@ -96,6 +96,45 @@ class RetrievalResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class Claim(BaseModel):
+    """One sentence of a generated answer, with its resolved citations.
+
+    ``chunk_ids`` contains only citations that resolved through the
+    request-scoped label map. Labels the model invented (not offered in the
+    prompt) land in ``invalid_labels`` — they are flagged, never resolved.
+    """
+
+    text: str = Field(description="The sentence with citation markers stripped.")
+    chunk_ids: list[str] = Field(
+        default_factory=list, description="Canonical chunk IDs this sentence cites."
+    )
+    invalid_labels: list[int] = Field(
+        default_factory=list,
+        description="Citation labels the model emitted that were never offered.",
+    )
+
+
+class Answer(BaseModel):
+    """A cited answer to a single question.
+
+    ``chunks[i]`` is the source that was offered to the model as label
+    ``[i+1]``; that positional contract is what lets clients render the raw
+    ``answer_text`` markers as links.
+    """
+
+    question: str = Field(description="The question as asked.")
+    answer_text: str = Field(description="Raw model output, citation markers included.")
+    claims: list[Claim] = Field(description="Parsed sentences with resolved citations.")
+    chunks: list[RetrievedChunk] = Field(
+        description="Context offered to the model; index i corresponds to label [i+1]."
+    )
+    model: str = Field(description="Chat model that generated the answer.")
+    warnings: list[str] = Field(
+        default_factory=list,
+        description="Integrity warnings: invented citations, store desync, ...",
+    )
+
+
 class FileIngestResult(BaseModel):
     """Outcome of ingesting a single file."""
 

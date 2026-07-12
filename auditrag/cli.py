@@ -4,6 +4,7 @@ Usage::
 
     auditrag ingest ./docs [--config auditrag.yaml]
     auditrag search "What is the retention period?" [--top-k 6]
+    auditrag ask "What is the retention period?" [--top-k 6]
     auditrag serve [--host 127.0.0.1] [--port 8000]
 """
 
@@ -51,6 +52,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--top-k", type=int, default=6, help="Maximum chunks to return (default: 6)."
     )
     _add_config_arg(search)
+
+    ask = subparsers.add_parser(
+        "ask",
+        help="Ask a question and get an answer with sentence-level citations.",
+        description=(
+            "Retrieve context, generate an answer where every sentence cites "
+            "its sources, and print the answer with a resolved source list. "
+            "Requires an LLM endpoint (llm section of auditrag.yaml)."
+        ),
+    )
+    ask.add_argument("question", type=str, help="Natural-language question.")
+    ask.add_argument(
+        "--top-k", type=int, default=6, help="Chunks offered as context (default: 6)."
+    )
+    _add_config_arg(ask)
 
     serve = subparsers.add_parser(
         "serve",
@@ -121,6 +137,35 @@ def _run_search(question: str, top_k: int, config: Path | None) -> int:
     return 0
 
 
+def _run_ask(question: str, top_k: int, config: Path | None) -> int:
+    """Execute the ask command. Returns a process exit code."""
+    from auditrag.answer import generate_answer
+    from auditrag.llm import LLMError
+    from auditrag.retrieval import RetrievalError
+
+    settings = Settings.load(config)
+    try:
+        answer = generate_answer(question, settings, top_k=top_k)
+    except (RetrievalError, LLMError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    for warning in answer.warnings:
+        print(f"warning: {warning}", file=sys.stderr)
+
+    print(answer.answer_text)
+
+    cited_ids = {cid for claim in answer.claims for cid in claim.chunk_ids}
+    print("\nSources:")
+    for i, hit in enumerate(answer.chunks, start=1):
+        chunk = hit.chunk
+        marker = "*" if chunk.chunk_id in cited_ids else " "
+        print(f" {marker}[{i}] {chunk.doc_name} p.{chunk.page}  ({chunk.chunk_id})")
+    if cited_ids:
+        print(" * = cited in the answer")
+    return 0
+
+
 def _run_serve(host: str, port: int, config: Path | None) -> int:
     """Execute the serve command. Returns a process exit code."""
     import uvicorn
@@ -142,6 +187,8 @@ def main() -> None:
             sys.exit(_run_ingest(args.path, args.config))
         if args.command == "search":
             sys.exit(_run_search(args.question, args.top_k, args.config))
+        if args.command == "ask":
+            sys.exit(_run_ask(args.question, args.top_k, args.config))
         if args.command == "serve":
             sys.exit(_run_serve(args.host, args.port, args.config))
         parser.error(f"Unknown command: {args.command}")

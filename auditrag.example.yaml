@@ -15,6 +15,15 @@ embedding:
   # model: text-embedding-3-small
   # api_key_env: OPENAI_API_KEY           # env var holding the key
 
+llm:
+  # Chat model for cited generation ('auditrag ask'). Any OpenAI-compatible
+  # /chat/completions endpoint works.
+  model: gpt-4o-mini
+  # base_url: http://localhost:11434/v1   # e.g. Ollama; omit for api.openai.com
+  api_key_env: OPENAI_API_KEY             # env var holding the key
+  temperature: 0.0
+  max_tokens: 1024
+
 storage:
   # Directory holding the SQLite chunk registry and the ChromaDB index.
   data_dir: .auditrag

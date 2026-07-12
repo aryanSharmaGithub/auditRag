@@ -4,10 +4,11 @@ Endpoints:
 
 * ``GET /health`` — index statistics and version.
 * ``POST /query`` — ranked chunks with full provenance for a question.
+* ``POST /ask`` — a generated answer with sentence-level citations.
 
 Error mapping: an empty index is ``409 Conflict`` (the request is fine, the
-system state isn't), embedding-backend failures are ``502 Bad Gateway``, and
-request validation problems are FastAPI's standard ``422``.
+system state isn't), embedding-backend and LLM failures are ``502 Bad
+Gateway``, and request validation problems are FastAPI's standard ``422``.
 """
 
 from __future__ import annotations
@@ -17,9 +18,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from auditrag import __version__
+from auditrag.answer import generate_answer
 from auditrag.chunk_store import ChunkStore
 from auditrag.config import Settings
-from auditrag.models import RetrievalResult
+from auditrag.llm import LLMClient, LLMError
+from auditrag.models import Answer, RetrievalResult
 from auditrag.retrieval import EmptyIndexError, RetrievalError, Retriever
 
 
@@ -42,6 +45,7 @@ class HealthResponse(BaseModel):
 def create_app(
     settings: Settings | None = None,
     embedding_function: EmbeddingFunction[Documents] | None = None,
+    llm_client: LLMClient | None = None,
 ) -> FastAPI:
     """Build the FastAPI application.
 
@@ -49,11 +53,12 @@ def create_app(
         settings: Loaded settings; defaults to :meth:`Settings.load` semantics
             (``auditrag.yaml`` in the working directory, else defaults).
         embedding_function: Optional override, mainly for tests.
+        llm_client: Optional override, mainly for tests.
 
     Returns:
-        A configured FastAPI app. The retriever (and its ChromaDB handle) is
-        created lazily on first query, so the app starts even when the data
-        directory does not exist yet.
+        A configured FastAPI app. The retriever (and its ChromaDB handle) and
+        the LLM client are created lazily on first use, so the app starts
+        even when the data directory does not exist yet.
     """
     app_settings = settings if settings is not None else Settings.load()
 
@@ -62,12 +67,19 @@ def create_app(
         version=__version__,
         description="RAG answers you can verify.",
     )
-    state: dict[str, Retriever] = {}
+    state: dict[str, object] = {}
 
     def get_retriever() -> Retriever:
         if "retriever" not in state:
             state["retriever"] = Retriever(app_settings, embedding_function)
-        return state["retriever"]
+        return state["retriever"]  # type: ignore[return-value]
+
+    def get_llm() -> LLMClient:
+        if llm_client is not None:
+            return llm_client
+        if "llm" not in state:
+            state["llm"] = LLMClient(app_settings.llm)
+        return state["llm"]  # type: ignore[return-value]
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:
@@ -89,6 +101,22 @@ def create_app(
         except EmptyIndexError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except RetrievalError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    @app.post("/ask", response_model=Answer)
+    def ask(request: QueryRequest) -> Answer:
+        """Return a generated answer with sentence-level citations."""
+        try:
+            return generate_answer(
+                request.question,
+                app_settings,
+                top_k=request.top_k,
+                retriever=get_retriever(),
+                llm_client=get_llm(),
+            )
+        except EmptyIndexError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (RetrievalError, LLMError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return app

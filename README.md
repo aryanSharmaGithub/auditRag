@@ -8,7 +8,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Ingestion and citation-tracked retrieval are shipped and tested; cited generation (`ask`) and the verification pipeline are in progress. The [roadmap](#roadmap) below is the source of truth.
+> **Status:** early development. Ingestion, citation-tracked retrieval, and cited generation (`ask`) are shipped and tested; the faithfulness verification pipeline is in progress. The [roadmap](#roadmap) below is the source of truth.
 
 ## Why
 
@@ -30,7 +30,8 @@ auditrag search "What is the data retention period?"
 # Or run the HTTP API (GET /health, POST /query)
 auditrag serve
 
-# Ask a question, get a cited answer   (ships in milestone 4 — see roadmap)
+# Ask a question, get an answer where every sentence cites its source
+# (needs an LLM endpoint — set OPENAI_API_KEY, or point llm.base_url at Ollama)
 auditrag ask "What is the data retention period?"
 ```
 
@@ -77,6 +78,11 @@ Copy [auditrag.example.yaml](auditrag.example.yaml) to `auditrag.yaml` in your w
 | `embedding.base_url` | *(none)* | Endpoint URL for `openai` provider, e.g. `http://localhost:11434/v1` for Ollama. Omit for api.openai.com. |
 | `embedding.model` | `text-embedding-3-small` | Embedding model name (`openai` provider only). |
 | `embedding.api_key_env` | `OPENAI_API_KEY` | Environment variable holding the API key. Keys are never written to disk. |
+| `llm.model` | `gpt-4o-mini` | Chat model for cited generation (`ask`). |
+| `llm.base_url` | *(none)* | OpenAI-compatible chat endpoint; same convention as `embedding.base_url`. |
+| `llm.api_key_env` | `OPENAI_API_KEY` | Environment variable holding the chat API key. |
+| `llm.temperature` | `0.0` | Sampling temperature; cited generation wants determinism. |
+| `llm.max_tokens` | `1024` | Maximum tokens in a generated answer. |
 | `storage.data_dir` | `.auditrag` | Directory for the SQLite registry and ChromaDB index. |
 | `storage.collection` | `auditrag_chunks` | ChromaDB collection name. |
 
@@ -93,7 +99,7 @@ embedding:
 
 - [x] **Ingestion** — PDF/MD/TXT loading, page-aware chunking, SQLite registry + ChromaDB index, `auditrag ingest`
 - [x] **Retrieval endpoint** — FastAPI `/query` and `auditrag search` returning ranked chunks with full provenance (retrieval quality is debuggable before any LLM is involved)
-- [ ] **Cited generation** — sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
+- [x] **Cited generation** — `auditrag ask` and `POST /ask`: sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
 - [ ] **Hybrid search** — BM25 + vector with reciprocal rank fusion
 - [ ] **Faithfulness verification** — independent pass judging each claim against its cited chunk: `supported` / `partial` / `unsupported`
 - [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
