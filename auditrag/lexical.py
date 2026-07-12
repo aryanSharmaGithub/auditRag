@@ -2,9 +2,21 @@
 
 The corpus comes from SQLite — the canonical chunk store — not from the
 vector database, so lexical and vector retrieval can never disagree about
-what a chunk ID means. The index is built in memory at retriever
-construction; for the corpus sizes AuditRAG targets (local document sets)
-this takes milliseconds.
+what a chunk ID means.
+
+Known limitation (v1): the index is built in memory from the full corpus at
+retriever construction; it is not persisted or incrementally updated. Two
+consequences:
+
+* Every CLI invocation (``ask``/``search``) rebuilds the index from scratch.
+  Build cost is linear in corpus size — negligible for the local document
+  sets AuditRAG targets, but noticeable at tens of thousands of chunks.
+* A long-running ``auditrag serve`` builds the index once and caches it, so
+  it will not reflect documents ingested after startup until restarted (see
+  :class:`auditrag.retrieval.Retriever`).
+
+Persisting the index to disk and updating it incrementally on ingest is
+deferred until corpus size warrants it.
 """
 
 from __future__ import annotations
