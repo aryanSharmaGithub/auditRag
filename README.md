@@ -1,6 +1,6 @@
 # AuditRAG
 
-[![CI](https://github.com/aryanSharmaGithub/auditRag/actions/workflows/ci.yml/badge.svg)](https://github.com/aryanSharmaGithub/auditRag/actions/workflows/ci.yml)
+[![CI](https://github.com/aryanSharmaGithub/auditrag/actions/workflows/ci.yml/badge.svg)](https://github.com/aryanSharmaGithub/auditrag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **RAG answers you can verify — citations, faithfulness checks, and exportable evidence reports.**
@@ -16,7 +16,7 @@ RAG systems today cite documents, not claims — a link to a 40-page PDF under a
 ## Quickstart
 
 ```bash
-git clone https://github.com/aryanSharmaGithub/auditRag.git auditrag && cd auditrag
+git clone https://github.com/aryanSharmaGithub/auditrag.git auditrag && cd auditrag
 pip install -r requirements.txt && pip install -e .
 
 # Index your documents (.pdf, .md, .txt) — no API key needed,
