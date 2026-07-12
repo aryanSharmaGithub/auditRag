@@ -1,9 +1,12 @@
 # Core runtime dependencies. Install with: pip install -r requirements.txt
 chromadb>=0.5.3
+fastapi>=0.110
 openai>=1.30
 pydantic>=2.5
 pypdf>=4.0
 PyYAML>=6.0
+uvicorn>=0.29
 
 # Development / testing
+httpx>=0.27
 pytest>=8.0

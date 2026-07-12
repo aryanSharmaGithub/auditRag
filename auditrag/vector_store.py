@@ -57,6 +57,30 @@ class VectorStore:
             ],
         )
 
+    def query(self, text: str, n_results: int) -> list[tuple[str, float]]:
+        """Return the nearest chunks to a query text.
+
+        Args:
+            text: Query text; embedded with the collection's embedding function.
+            n_results: Number of hits requested. Clamped to the collection
+                size, since ChromaDB rejects over-asking on small collections.
+
+        Returns:
+            ``(chunk_id, distance)`` pairs in ascending cosine distance,
+            empty if the collection is empty.
+        """
+        available = self.count()
+        if available == 0:
+            return []
+        result = self._collection.query(
+            query_texts=[text],
+            n_results=min(n_results, available),
+            include=["distances"],
+        )
+        ids = result["ids"][0]
+        distances = (result.get("distances") or [[]])[0]
+        return list(zip(ids, distances))
+
     def delete_document(self, doc_id: str) -> None:
         """Delete all embeddings belonging to a document (used on re-ingest)."""
         self._collection.delete(where={"doc_id": doc_id})

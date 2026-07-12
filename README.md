@@ -1,86 +1,117 @@
 # AuditRAG
 
-**RAG answers you can actually verify.**
+**RAG answers you can verify — citations, faithfulness checks, and exportable evidence reports.**
 
-Most RAG stacks give you an answer and a vibe. AuditRAG gives you an answer,
-sentence-level citations that resolve to exact source chunks with page
-numbers, an independent faithfulness check that flags unsupported claims, and
-a timestamped PDF evidence report you can hand to an auditor.
+<!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
+![AuditRAG demo](docs/assets/demo.gif)
 
-Runs locally with zero setup: SQLite + ChromaDB, any OpenAI-compatible LLM
-endpoint (OpenAI, Ollama, vLLM, LM Studio, ...).
+> **Status:** early development. Ingestion (milestone 1) is shipped and tested; `ask` and the verification pipeline are in progress. The [roadmap](#roadmap) below is the source of truth.
 
-> **Status: early development.** Milestone 1 (ingestion pipeline) is
-> implemented. Retrieval, cited generation, faithfulness verification, and
-> evidence export are in progress — see the roadmap below.
+## Why
 
-## Install
+RAG systems today cite documents, not claims — a link to a 40-page PDF under a paragraph of generated text verifies nothing. Even when frameworks track sources internally, the provenance is usually destroyed in flight: chunk metadata gets dropped between retrieval and generation, and the model is free to assert things its sources never said. AuditRAG treats provenance as the product: every sentence maps to an exact chunk with a page number, a second model checks each claim against its cited evidence, and the whole session exports as a timestamped report you can hand to an auditor.
+
+## Quickstart
 
 ```bash
-pip install -r requirements.txt
-pip install -e .
-```
+git clone https://github.com/aryansharma/auditrag && cd auditrag
+pip install -r requirements.txt && pip install -e .
 
-Requires Python 3.10+.
-
-## Usage
-
-```bash
+# Index your documents (.pdf, .md, .txt) — no API key needed,
+# embeddings run locally by default
 auditrag ingest ./docs
+
+# Inspect retrieval quality directly — ranked chunks with file, page, and ID
+auditrag search "What is the data retention period?"
+
+# Or run the HTTP API (GET /health, POST /query)
+auditrag serve
+
+# Ask a question, get a cited answer   (ships in milestone 4 — see roadmap)
+auditrag ask "What is the data retention period?"
 ```
 
-Ingests every `.pdf`, `.md`, and `.txt` under `./docs`: documents are split
-into page-aware chunks and indexed into a local ChromaDB collection, with a
-SQLite chunk registry as the canonical record of every chunk's provenance
-(source file, page number, character offsets).
+Requires Python 3.10+. Ingestion is idempotent: unchanged files are skipped, modified files are re-indexed in place.
 
-Ingestion is idempotent — unchanged files are skipped, modified files are
-re-indexed in place.
+## Architecture
 
-### Configuration
+```mermaid
+flowchart LR
+    subgraph ingest [Ingestion]
+        F[PDF / MD / TXT] --> CH["Page-aware chunker<br/>chunk_id = doc:page:index"]
+        CH --> SQ[("SQLite<br/>chunk registry")]
+        CH --> VD[("ChromaDB<br/>embeddings")]
+    end
 
-Copy [auditrag.example.yaml](auditrag.example.yaml) to `auditrag.yaml`. All
-fields are optional; the defaults use a local embedding model with no API key.
-To embed via any OpenAI-compatible endpoint instead:
+    subgraph query [Query]
+        Q[Question] --> R["Hybrid retrieval<br/>BM25 + vector, RRF"]
+        R --> G["LLM generation<br/>sentence-level [n] citations"]
+        G --> V["Faithfulness verifier<br/>claim vs. cited chunk"]
+        V --> A["Cited answer<br/>+ PDF evidence report"]
+    end
+
+    SQ -. "BM25 corpus + chunk text" .-> R
+    VD -. "vector hits" .-> R
+    SQ -. "verbatim evidence" .-> V
+```
+
+Three invariants make the citations trustworthy:
+
+- **Chunk IDs are minted once and never regenerated.** `{doc_hash}:{page}:{chunk_index}` is deterministic, human-decodable, and survives every pipeline stage. The LLM only ever sees small integer labels; the label→ID map lives in request scope, so a hallucinated citation is detected, not resolved.
+- **SQLite is the source of truth for chunk content.** ChromaDB holds embeddings keyed by the same IDs, nothing more. Citation resolution and evidence reports never depend on vector-store internals.
+- **Chunks never cross page boundaries.** Every citation carries a single exact page number, and `page_text[start_char:end_char] == chunk.text` is enforced by tests.
+
+No LangChain. Every hop is a plain typed function exchanging Pydantic models — for a tool whose pitch is "audit this," the pipeline itself has to be auditable.
+
+## Configuration
+
+Copy [auditrag.example.yaml](auditrag.example.yaml) to `auditrag.yaml` in your working directory. Every field is optional.
+
+| Key | Default | Description |
+|---|---|---|
+| `chunking.max_chars` | `1200` | Max characters per chunk; sentences packed greedily, never across pages. |
+| `embedding.provider` | `local` | `local` (built-in ONNX MiniLM, no API key) or `openai` (any OpenAI-compatible endpoint). |
+| `embedding.base_url` | *(none)* | Endpoint URL for `openai` provider, e.g. `http://localhost:11434/v1` for Ollama. Omit for api.openai.com. |
+| `embedding.model` | `text-embedding-3-small` | Embedding model name (`openai` provider only). |
+| `embedding.api_key_env` | `OPENAI_API_KEY` | Environment variable holding the API key. Keys are never written to disk. |
+| `storage.data_dir` | `.auditrag` | Directory for the SQLite registry and ChromaDB index. |
+| `storage.collection` | `auditrag_chunks` | ChromaDB collection name. |
+
+Example — embed via Ollama instead of the built-in model:
 
 ```yaml
 embedding:
   provider: openai
-  base_url: http://localhost:11434/v1   # e.g. Ollama
+  base_url: http://localhost:11434/v1
   model: nomic-embed-text
 ```
 
-## Design notes
-
-- **Chunk IDs are minted once and survive the whole pipeline.** Format:
-  `{doc_hash}:{page}:{chunk_index}` — deterministic, human-decodable, and
-  stable across re-ingestion of unchanged files.
-- **SQLite is the source of truth for chunk content.** ChromaDB holds only
-  embeddings keyed by the same IDs. Citation resolution and evidence reports
-  never depend on vector-store internals, which also keeps the vector store
-  swappable.
-- **Chunks never cross page boundaries**, so every citation carries a single
-  exact page number.
-
 ## Roadmap
 
-1. ✅ Ingestion: loading, page-aware chunking, ChromaDB + SQLite indexing
-2. Vector retrieval endpoint (FastAPI)
-3. Cited generation: sentence-level `[n]` citations mapped to chunk IDs
-4. Hybrid search (BM25 + vector, reciprocal rank fusion)
-5. Faithfulness verification pass
-6. Web UI with citation hover cards and verdict badges
-7. Timestamped PDF evidence reports
+- [x] **Ingestion** — PDF/MD/TXT loading, page-aware chunking, SQLite registry + ChromaDB index, `auditrag ingest`
+- [x] **Retrieval endpoint** — FastAPI `/query` and `auditrag search` returning ranked chunks with full provenance (retrieval quality is debuggable before any LLM is involved)
+- [ ] **Cited generation** — sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
+- [ ] **Hybrid search** — BM25 + vector with reciprocal rank fusion
+- [ ] **Faithfulness verification** — independent pass judging each claim against its cited chunk: `supported` / `partial` / `unsupported`
+- [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
+- [ ] **Evidence export** — timestamped PDF report: question, claims, verdicts, verbatim cited chunks with provenance
 
-## Development
+Deliberately out of scope for v1: multi-turn chat, rerankers, eval harnesses, pluggable fusion strategies. Single-shot Q&A keeps citation scope unambiguous; knobs get added when someone needs them.
+
+## Contributing
+
+Issues and PRs welcome. Ground rules:
 
 ```bash
-pytest
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt && pip install -e .
+pytest                       # runs fully offline, no API key or model download
 ```
 
-Tests run fully offline using a dummy embedding function.
+- Everything typed, docstrings on every public symbol. The code is meant to be read.
+- Provenance is the invariant: if a change can drop or mangle a chunk ID between stages, it's wrong. `tests/test_ingest.py` shows the style — deterministic, offline, asserting exact offsets.
+- No heavyweight framework dependencies. If a feature needs LangChain, it needs a design discussion first.
 
 ## License
 
 MIT
-# auditRag

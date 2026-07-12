@@ -68,6 +68,34 @@ class Chunk(BaseModel):
     end_char: int = Field(description="End offset (exclusive) within the page text.")
 
 
+class RetrievedChunk(BaseModel):
+    """A chunk returned by retrieval, with its relevance score.
+
+    The embedded :class:`Chunk` is always hydrated from the SQLite chunk
+    registry — never from vector-store payloads — so downstream stages
+    (generation, verification, evidence reports) see canonical content.
+    """
+
+    chunk: Chunk = Field(description="The chunk, hydrated from the canonical registry.")
+    score: float = Field(
+        description="Similarity score (1 - cosine distance); higher is more relevant."
+    )
+    rank: int = Field(description="0-based position in the ranked result list.")
+
+
+class RetrievalResult(BaseModel):
+    """Ranked chunks for a query, plus any integrity warnings.
+
+    ``warnings`` is non-empty when the vector index and the chunk registry
+    disagree (e.g. an embedding whose chunk is missing from SQLite). Such
+    hits are skipped rather than served with unverifiable provenance.
+    """
+
+    query: str = Field(description="The query text as searched.")
+    chunks: list[RetrievedChunk] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class FileIngestResult(BaseModel):
     """Outcome of ingesting a single file."""
 
