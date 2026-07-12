@@ -42,5 +42,8 @@ Homepage = "https://github.com/aryansharma/auditrag"
 [tool.setuptools.packages.find]
 include = ["auditrag*"]
 
+[tool.setuptools.package-data]
+auditrag = ["web/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

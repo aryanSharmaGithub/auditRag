@@ -2,6 +2,7 @@
 
 Endpoints:
 
+* ``GET /`` — the single-page web UI.
 * ``GET /health`` — index statistics and version.
 * ``POST /query`` — ranked chunks with full provenance for a question.
 * ``POST /ask`` — a generated answer with sentence-level citations.
@@ -15,10 +16,14 @@ Gateway``, and request validation problems are FastAPI's standard ``422``.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from chromadb.api.types import Documents, EmbeddingFunction
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
+
+_INDEX_HTML = Path(__file__).parent / "web" / "index.html"
 
 from auditrag import __version__
 from auditrag.answer import generate_answer
@@ -107,6 +112,11 @@ def create_app(
         if "llm" not in state:
             state["llm"] = LLMClient(app_settings.llm)
         return state["llm"]  # type: ignore[return-value]
+
+    @app.get("/", response_class=HTMLResponse)
+    def index() -> HTMLResponse:
+        """Serve the single-page web UI."""
+        return HTMLResponse(_INDEX_HTML.read_text(encoding="utf-8"))
 
     @app.get("/health", response_model=HealthResponse)
     def health() -> HealthResponse:

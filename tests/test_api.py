@@ -18,6 +18,15 @@ def _client(settings: Settings) -> TestClient:
     return TestClient(app)
 
 
+def test_index_serves_web_ui(settings: Settings) -> None:
+    response = _client(settings).get("/")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "AuditRAG" in response.text
+    # The UI must talk to the endpoints it depends on.
+    assert "/ask" in response.text and "/report" in response.text
+
+
 def test_health_reports_index_stats(settings: Settings, docs_dir: Path) -> None:
     result = ingest_path(docs_dir, settings, embedding_function=DummyEmbeddingFunction())
 
