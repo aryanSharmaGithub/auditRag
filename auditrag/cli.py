@@ -72,6 +72,13 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run the faithfulness pass: judge every claim against its cited "
         "evidence and print a verdict per sentence (one extra LLM call).",
     )
+    ask.add_argument(
+        "--export",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Also write a timestamped PDF evidence report to PATH.",
+    )
     _add_config_arg(ask)
 
     serve = subparsers.add_parser(
@@ -152,7 +159,9 @@ _VERDICT_SYMBOLS = {
 }
 
 
-def _run_ask(question: str, top_k: int, verify: bool, config: Path | None) -> int:
+def _run_ask(
+    question: str, top_k: int, verify: bool, export: Path | None, config: Path | None
+) -> int:
     """Execute the ask command. Returns a process exit code."""
     from auditrag.answer import generate_answer
     from auditrag.llm import LLMError
@@ -189,6 +198,12 @@ def _run_ask(question: str, top_k: int, verify: bool, config: Path | None) -> in
         flagged = sum(1 for c in answer.claims if c.verdict == "unsupported")
         if flagged:
             print(f"\n {flagged} claim(s) NOT supported by their cited sources.")
+
+    if export is not None:
+        from auditrag.report import build_evidence_report
+
+        export.write_bytes(build_evidence_report([answer], settings))
+        print(f"\nEvidence report written to {export}")
     return 0
 
 
@@ -214,7 +229,9 @@ def main() -> None:
         if args.command == "search":
             sys.exit(_run_search(args.question, args.top_k, args.config))
         if args.command == "ask":
-            sys.exit(_run_ask(args.question, args.top_k, args.verify, args.config))
+            sys.exit(
+                _run_ask(args.question, args.top_k, args.verify, args.export, args.config)
+            )
         if args.command == "serve":
             sys.exit(_run_serve(args.host, args.port, args.config))
         parser.error(f"Unknown command: {args.command}")

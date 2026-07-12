@@ -8,7 +8,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Ingestion, citation-tracked retrieval, cited generation (`ask`), and the faithfulness verification pass (`ask --verify`) are shipped and tested. The [roadmap](#roadmap) below is the source of truth.
+> **Status:** early development. Ingestion, citation-tracked retrieval, cited generation (`ask`), the faithfulness verification pass (`ask --verify`), and PDF evidence export (`--export`) are shipped and tested. The [roadmap](#roadmap) below is the source of truth.
 
 ## Why
 
@@ -37,6 +37,10 @@ auditrag ask "What is the data retention period?"
 # Same, plus a faithfulness pass: every claim is judged against the exact
 # text of the chunks it cites — unsupported claims get flagged
 auditrag ask --verify "What is the data retention period?"
+
+# Export the whole exchange as a timestamped PDF evidence report:
+# claims, verdicts, and the verbatim cited chunks with page numbers
+auditrag ask --verify --export evidence.pdf "What is the data retention period?"
 ```
 
 Requires Python 3.10+. Ingestion is idempotent: unchanged files are skipped, modified files are re-indexed in place.
@@ -107,7 +111,7 @@ embedding:
 - [ ] **Hybrid search** — BM25 + vector with reciprocal rank fusion
 - [x] **Faithfulness verification** — `ask --verify` / `"verify": true`: independent pass judging each claim against the registry text of its cited chunks: `supported` / `partial` / `unsupported` / `uncited`
 - [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
-- [ ] **Evidence export** — timestamped PDF report: question, claims, verdicts, verbatim cited chunks with provenance
+- [x] **Evidence export** — `ask --export` / `POST /report`: timestamped PDF with question, claims, verdicts, and verbatim cited chunks re-fetched from the registry at export time
 
 Deliberately out of scope for v1: multi-turn chat, rerankers, eval harnesses, pluggable fusion strategies. Single-shot Q&A keeps citation scope unambiguous; knobs get added when someone needs them.
 

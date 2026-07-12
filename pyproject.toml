@@ -21,6 +21,7 @@ classifiers = [
 dependencies = [
     "chromadb>=0.5.3",
     "fastapi>=0.110",
+    "fpdf2>=2.7",
     "openai>=1.30",
     "pydantic>=2.5",
     "pypdf>=4.0",
