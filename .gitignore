@@ -11,6 +11,9 @@ dist/
 .venv/
 venv/
 
+# Editor / agent config
+.claude/
+
 # Tooling
 .pytest_cache/
 .mypy_cache/
