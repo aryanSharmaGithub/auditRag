@@ -1,9 +1,14 @@
-"""Citation-tracked retrieval.
+"""Citation-tracked hybrid retrieval.
 
-The vector store proposes chunk IDs; the SQLite chunk registry supplies the
-content. Every retrieved chunk is hydrated from the registry — the canonical
-source of truth — so downstream stages (generation, verification, evidence
+Two rankers propose chunk IDs — vector similarity (ChromaDB) and BM25 over
+the registry corpus — and their rankings are combined with reciprocal rank
+fusion. Fusion operates purely on chunk IDs, so it cannot mangle provenance;
+the winners are then hydrated from the SQLite chunk registry, the canonical
+source of truth. Downstream stages (generation, verification, evidence
 reports) can never be fed text that differs from what a citation resolves to.
+
+RRF uses the standard ``k=60`` constant, deliberately not configurable in v1:
+it is the parameter-free reason RRF was chosen over score interpolation.
 
 Hits whose registry record is missing (index/registry desync, e.g. a deleted
 ``chunks.db`` or an interrupted ingest) are skipped and surfaced as warnings
@@ -12,13 +17,40 @@ rather than served with unverifiable provenance.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from chromadb.api.types import Documents, EmbeddingFunction
 
 from auditrag.chunk_store import ChunkStore
 from auditrag.config import Settings
 from auditrag.embeddings import build_embedding_function
+from auditrag.lexical import BM25Index
 from auditrag.models import RetrievalResult, RetrievedChunk
 from auditrag.vector_store import VectorStore
+
+_RRF_K = 60
+_CANDIDATE_POOL = 20  # per ranker, before fusion
+
+
+def _rrf_fuse(rankings: Sequence[Sequence[str]], k: int = _RRF_K) -> list[tuple[str, float]]:
+    """Fuse rankings with reciprocal rank fusion.
+
+    Each document scores ``sum(1 / (k + rank_i + 1))`` over the rankings that
+    contain it (rank is 0-based). Documents appearing in several rankings
+    rise; ties broken by first appearance for determinism.
+
+    Args:
+        rankings: ID lists in descending relevance order, one per ranker.
+        k: The RRF damping constant.
+
+    Returns:
+        ``(chunk_id, score)`` pairs, best first.
+    """
+    scores: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, chunk_id in enumerate(ranking):
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (k + rank + 1)
+    return sorted(scores.items(), key=lambda pair: pair[1], reverse=True)
 
 
 class RetrievalError(RuntimeError):
@@ -34,10 +66,12 @@ class EmptyIndexError(RetrievalError):
 
 
 class Retriever:
-    """Searches the vector index and hydrates hits from the chunk registry.
+    """Hybrid (vector + BM25) search, hydrated from the chunk registry.
 
-    A new SQLite connection is opened per search, so a single instance is
-    safe to share across FastAPI's request threadpool.
+    The BM25 index is built from the registry once at construction; create
+    a new retriever after ingesting to pick up new documents. A new SQLite
+    connection is opened per search, so a single instance is safe to share
+    across FastAPI's request threadpool.
     """
 
     def __init__(
@@ -76,16 +110,26 @@ class Retriever:
                 "re-ingest with the new ones."
             ) from exc
 
+        if settings.chunk_db_path.exists():
+            with ChunkStore(settings.chunk_db_path) as store:
+                corpus = store.all_chunk_texts()
+        else:
+            corpus = []
+        self._bm25 = BM25Index(corpus)
+
     def search(self, query: str, top_k: int = 6) -> RetrievalResult:
         """Return the ``top_k`` most relevant chunks with full provenance.
+
+        Vector and BM25 rankings are fused with RRF before hydration; a
+        chunk found by either ranker can therefore appear in the results.
 
         Args:
             query: Natural-language query text.
             top_k: Maximum number of chunks to return.
 
         Returns:
-            Ranked chunks (highest similarity first) plus integrity warnings
-            for any vector hits that could not be hydrated from the registry.
+            Ranked chunks (best fused score first) plus integrity warnings
+            for any hits that could not be hydrated from the registry.
 
         Raises:
             EmptyIndexError: If no documents have been ingested yet.
@@ -97,8 +141,9 @@ class Retriever:
                 "The index is empty — ingest documents first: auditrag ingest ./docs"
             )
 
+        pool = max(_CANDIDATE_POOL, top_k)
         try:
-            hits = self._vector_store.query(query, n_results=top_k)
+            vector_hits = self._vector_store.query(query, n_results=pool)
         except EmptyIndexError:
             raise
         except Exception as exc:
@@ -109,20 +154,24 @@ class Retriever:
                 "model name, and the API key environment variable."
             ) from exc
 
+        vector_ranking = [chunk_id for chunk_id, _ in vector_hits]
+        lexical_ranking = self._bm25.query(query, n_results=pool)
+        fused = _rrf_fuse([vector_ranking, lexical_ranking])
+
         chunks: list[RetrievedChunk] = []
         warnings: list[str] = []
         with ChunkStore(self._settings.chunk_db_path) as store:
-            for chunk_id, distance in hits:
+            for chunk_id, score in fused:
+                if len(chunks) == top_k:
+                    break
                 chunk = store.get_chunk(chunk_id)
                 if chunk is None:
                     warnings.append(
-                        f"Chunk '{chunk_id}' is in the vector index but missing from "
-                        "the chunk registry; skipped. The stores are out of sync — "
-                        "re-run 'auditrag ingest' to rebuild."
+                        f"Chunk '{chunk_id}' was proposed by retrieval but is missing "
+                        "from the chunk registry; skipped. The stores are out of sync "
+                        "— re-run 'auditrag ingest' to rebuild."
                     )
                     continue
-                chunks.append(
-                    RetrievedChunk(chunk=chunk, score=1.0 - distance, rank=len(chunks))
-                )
+                chunks.append(RetrievedChunk(chunk=chunk, score=score, rank=len(chunks)))
 
         return RetrievalResult(query=query, chunks=chunks, warnings=warnings)

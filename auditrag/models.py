@@ -88,7 +88,9 @@ class RetrievedChunk(BaseModel):
 
     chunk: Chunk = Field(description="The chunk, hydrated from the canonical registry.")
     score: float = Field(
-        description="Similarity score (1 - cosine distance); higher is more relevant."
+        description="Relevance score from reciprocal rank fusion of the vector and "
+        "BM25 rankings; higher is more relevant. Comparable within one result "
+        "list, not across queries."
     )
     rank: int = Field(description="0-based position in the ranked result list.")
 

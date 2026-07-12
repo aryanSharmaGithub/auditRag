@@ -144,6 +144,11 @@ class ChunkStore:
             end_char=row[7],
         )
 
+    def all_chunk_texts(self) -> list[tuple[str, str]]:
+        """Return ``(chunk_id, text)`` for every chunk (the BM25 corpus)."""
+        rows = self._conn.execute("SELECT chunk_id, text FROM chunks").fetchall()
+        return [(row[0], row[1]) for row in rows]
+
     def count_chunks(self) -> int:
         """Total number of chunks in the registry."""
         return int(self._conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0])

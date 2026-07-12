@@ -9,7 +9,8 @@ import pytest
 from auditrag.chunk_store import ChunkStore
 from auditrag.config import Settings
 from auditrag.ingest import ingest_path
-from auditrag.retrieval import EmptyIndexError, RetrievalError, Retriever
+from auditrag.lexical import BM25Index
+from auditrag.retrieval import EmptyIndexError, RetrievalError, Retriever, _rrf_fuse
 
 from .conftest import DummyEmbeddingFunction
 
@@ -72,6 +73,46 @@ def test_registry_desync_warns_and_skips(settings: Settings, docs_dir: Path) -> 
     assert len(result.warnings) == 1
     assert victim in result.warnings[0]
     assert victim not in [hit.chunk.chunk_id for hit in result.chunks]
+
+
+def test_rrf_ranks_doc_found_by_both_rankers_first() -> None:
+    fused = _rrf_fuse([["a", "b", "c"], ["c", "d"]])
+    ids = [chunk_id for chunk_id, _ in fused]
+    # "c" appears in both rankings (ranks 2 and 0); every other doc appears
+    # in only one, so "c" must fuse to the top.
+    assert ids[0] == "c"
+    assert set(ids) == {"a", "b", "c", "d"}
+
+
+def test_rrf_preserves_order_within_a_single_ranking() -> None:
+    fused = _rrf_fuse([["a", "b", "c"]])
+    assert [chunk_id for chunk_id, _ in fused] == ["a", "b", "c"]
+
+
+def test_bm25_ranks_exact_term_match_first() -> None:
+    index = BM25Index(
+        [
+            ("doc:1:0", "The retention period for customer records is seven years."),
+            ("doc:2:0", "Vendors sign a data processing agreement before onboarding."),
+            ("doc:3:0", "Incidents are reported within seventy-two hours."),
+        ]
+    )
+    assert index.query("data processing agreement", n_results=3)[0] == "doc:2:0"
+    # No shared terms at all: BM25 noise must not leak into fusion.
+    assert index.query("zebra xylophone", n_results=3) == []
+
+
+def test_hybrid_search_surfaces_exact_keyword_match(
+    settings: Settings, docs_dir: Path
+) -> None:
+    retriever = _ingested(settings, docs_dir)
+
+    result = retriever.search("BM25 vectors", top_k=3)
+
+    texts = [hit.chunk.text for hit in result.chunks]
+    # The dummy embeddings are hash noise, so this chunk surfacing proves the
+    # lexical ranking is contributing to fusion.
+    assert any("BM25 with vectors" in text for text in texts)
 
 
 def test_embedding_failure_raises_retrieval_error(

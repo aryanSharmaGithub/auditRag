@@ -8,7 +8,7 @@
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
 ![AuditRAG demo](docs/assets/demo.gif)
 
-> **Status:** early development. Ingestion, citation-tracked retrieval, cited generation (`ask`), the faithfulness verification pass (`ask --verify`), and PDF evidence export (`--export`) are shipped and tested. The [roadmap](#roadmap) below is the source of truth.
+> **Status:** early development. Everything except the web UI is shipped and tested: ingestion, hybrid citation-tracked retrieval, cited generation (`ask`), the faithfulness pass (`--verify`), and PDF evidence export (`--export`). The [roadmap](#roadmap) below is the source of truth.
 
 ## Why
 
@@ -108,7 +108,7 @@ embedding:
 - [x] **Ingestion** — PDF/MD/TXT loading, page-aware chunking, SQLite registry + ChromaDB index, `auditrag ingest`
 - [x] **Retrieval endpoint** — FastAPI `/query` and `auditrag search` returning ranked chunks with full provenance (retrieval quality is debuggable before any LLM is involved)
 - [x] **Cited generation** — `auditrag ask` and `POST /ask`: sentence-level `[n]` citations parsed and mapped back to chunk IDs, hallucinated-citation detection
-- [ ] **Hybrid search** — BM25 + vector with reciprocal rank fusion
+- [x] **Hybrid search** — BM25 over the registry corpus + vector, fused with reciprocal rank fusion (k=60, deliberately not configurable)
 - [x] **Faithfulness verification** — `ask --verify` / `"verify": true`: independent pass judging each claim against the registry text of its cited chunks: `supported` / `partial` / `unsupported` / `uncited`
 - [ ] **Web UI** — citation hover cards with source text and page numbers, verdict badges
 - [x] **Evidence export** — `ask --export` / `POST /report`: timestamped PDF with question, claims, verdicts, and verbatim cited chunks re-fetched from the registry at export time
