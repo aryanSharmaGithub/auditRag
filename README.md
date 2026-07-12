@@ -1,5 +1,8 @@
 # AuditRAG
 
+[![CI](https://github.com/aryanSharmaGithub/auditRag/actions/workflows/ci.yml/badge.svg)](https://github.com/aryanSharmaGithub/auditRag/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **RAG answers you can verify — citations, faithfulness checks, and exportable evidence reports.**
 
 <!-- TODO: record demo GIF (ingest → ask → hover citation → export report) -->
