@@ -14,7 +14,7 @@ RAG systems today cite documents, not claims — a link to a 40-page PDF under a
 ## Quickstart
 
 ```bash
-git clone https://github.com/aryansharma/auditrag && cd auditrag
+git clone https://github.com/aryanSharmaGithub/auditRag.git auditrag && cd auditrag
 pip install -r requirements.txt && pip install -e .
 
 # Index your documents (.pdf, .md, .txt) — no API key needed,
